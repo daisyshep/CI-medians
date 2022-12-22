@@ -1,16 +1,19 @@
 ######################################################################
 ## CONFOUNDING-ADJUSTMENT METHODS - DIFFERENCE IN MEDIANS
 ## Creator: D. A. Shepherd (UoM, MCRI)
-## Date edited: April 2022
+## Collaborator: M. Moreno-Betancur (UoM, MCRI)
+## Date edited: Dec 2022
 ######################################################################
 
 # NOTES:
-# Functions supporting the manuscript XXXX
+# Functions supporting the manuscript:
+#       'Confounding-adjustment method for the difference in medians'
+#       Pre-print: https://arxiv.org/abs/2207.05940
 # Functions to estimate the causal difference in medians
-# Bootstrap funtions provided to estimate the std. errors and 95% CIs
+# Bootstrap functions provided to estimate the std. errors and 95% CIs
 
 # Data file compatible with these functions is of the following form:
-#       - Continous outcome (denoted as Y)
+#       - Continuous outcome (denoted as Y)
 #       - Binary exposure (denoted as A; coded as 0/1)
 #       - Confounders (five in total; denoted as C1,...,C5)
 
@@ -21,7 +24,6 @@ library(boot)
 library(quantreg)
 library(MASS)
 library(Hmisc)
-
 
 ######################################################################
 # QUANTILE REGRESSION:
@@ -75,7 +77,7 @@ weight_qr <- function(data, ind, form1, form2, R){
   
   # Step 2: Calculate propensity scores
   ps <- predict(prob_mod, dat, type="response")
-
+  
   # Step 3: Generate IP weights
   ip_weights <- ifelse(dat$A==1, 1/ps, 1/(1-ps))
   dat2 <- cbind(dat, ip_weights)
@@ -87,7 +89,9 @@ weight_qr <- function(data, ind, form1, form2, R){
   est <- as.numeric(mod_rq$coef[2])
   return(est)
 }
+
 #######################################
+
 weight_qr_boot <- function(runboot_dat, R, stat, form1, form2, ncpu){
   
   # ARGUMENTS:
@@ -133,7 +137,7 @@ ipw_estimator <- function(data, ind, form){
   
   # Step 2: Calculate propensity scores
   ps <- predict(ps_mod, dat, type="response")
-
+  
   # Step 3: Generate inverse probability weights + normalised
   ipw <- ifelse(dat$A==1, 1/ps, 1/(1-ps))
   ipw2 <- ifelse(dat$A==1, ipw/(sum(ipw[dat$A==1])), ipw/(sum(ipw[dat$A==0])))
@@ -176,21 +180,22 @@ ipw_boot <- function(runboot_dat, R, stat, form, ncpu){
 
 
 ######################################################################
-# HEURISTIC G-COMPUTATION
+# G-COMPUTATION
 # Two variations in implementation:
-# 1. G-comp (med): Calculated as median of predictions
-# 2. G-comp (mean): Calculated as mean of predictions
+# 1. G-comp (MC)
+# 2. G-comp (approx)
 ######################################################################
 
-# G-COMP (MED)
-gcompstat_med <- function(data, ind, out, exp, form){
-  
+# G-COMPUTATION (MC)
+gcomp_mc <- function(data, ind, out, exp, form, reps){
+
   # ARGUMENTS:
   #       - data = data file as specified above
   #       - ind = argument required for gcompboot function
   #       - out = outcome variable
   #       - exp = exposure variable
   #       - form = formula for outcome model
+  #       - reps = number of reps for sampling per observation (R, integer)
 
   dat <- data[ind,] 
   
@@ -216,17 +221,32 @@ gcompstat_med <- function(data, ind, out, exp, form){
   if(is.factor(dat[[out]])==FALSE){
     if(is.numeric(dat[[out]])==TRUE){
       
-      # Fitting the linear model
-      fit <- rq(as.formula(form), data=onesample, method="br")
+      ## Fitting the linear model
+      fit <- lm(as.formula(formula), data=onesample)
       
-      ## Predicted values under fitted model
-      onesample$predicted_medY <- predict(fit, onesample)
+      ## Obtain individual predictions under fitted model
+      onesample$predicted_mY <- predict(fit, onesample)
+      
+      # Sampling to build exp and unexp distributions
+      # Looping over number of obs
+      obs_exp <- c()
+      obs_unexp <- c()
+      
+      for (i in 1:nrow(dat)){
+        obs_exp <- c(obs_exp,
+                     rlnorm(reps, 
+                            meanlog=onesample[which(onesample$index==1),]$predicted_mY,
+                            sdlog=sigma(fit)))
+        obs_unexp <- c(obs_unexp,
+                       rlnorm(reps, 
+                              meanlog=onesample[which(onesample$index==0),]$predicted_mY,
+                              sdlog=sigma(fit)))
+      } 
       
       ## Calculating average causal effect (ACE)
-      ## Calculated as mean of medians
-      EYA0 <- median(onesample[which(onesample$index==0),]$predicted_medY) 
-      EYA1 <- median(onesample[which(onesample$index==1),]$predicted_medY) 
-      ACE_diff_med <- EYA1 - EYA0
+      med_exp <- median(obs_exp)
+      med_unexp <- median(obs_unexp)
+      ACE_diff_med <- med_exp - med_unexp
       return(ACE_diff_med)
     }
   }
@@ -237,11 +257,11 @@ gcompstat_med <- function(data, ind, out, exp, form){
   } 
 }
 
+
 #######################################
 
-# G-COMP (MEAN)
-
-gcompstat_mean <- function(data, ind, out, exp, form){
+## G-COMPUTATION (APPROX)
+gcomp_approx <- function(data, ind, out, exp, formula, y_support){
   
   # ARGUMENTS:
   #       - data = data file as specified above
@@ -249,6 +269,8 @@ gcompstat_mean <- function(data, ind, out, exp, form){
   #       - out = outcome variable
   #       - exp = exposure variable
   #       - form = formula for outcome model
+  #       - y_support = vector of candidate y values (y*) to search over for the median
+  #                     (Note: assume vector is equally spaced across range)
   
   dat <- data[ind,] 
   
@@ -274,18 +296,42 @@ gcompstat_mean <- function(data, ind, out, exp, form){
   if(is.factor(dat[[out]])==FALSE){
     if(is.numeric(dat[[out]])==TRUE){
       
-      # Fitting the linear model
-      fit <- rq(as.formula(form), data=onesample, method="br")
+      ## Fitting the linear model
+      fit <- lm(as.formula(formula), data=onesample)
       
-      ## Predicted values under fitted model
-      onesample$predicted_medY <- predict(fit, onesample)
+      ## Obtain individual predictions under fitted model
+      onesample$predicted_mY <- predict(fit, onesample)
       
-      ## Calculating average causal effect (ACE)
-      ## Calculated as mean of medians
-      EYA0 <- mean(onesample[which(onesample$index==0),]$predicted_medY) 
-      EYA1 <- mean(onesample[which(onesample$index==1),]$predicted_medY) 
-      ACE_diff_med <- EYA1 - EYA0
-      return(ACE_diff_med)
+      ## Looping over y vector and for exposed and unexposed
+      g_y_exp <- c()
+      g_y_unexp <- c()
+      
+      for (i in 1:length(y_support)){
+        ## Estimate pdf for y|A=1,C
+        p_y <- dlnorm(x=y_support[i],
+                      meanlog=onesample[which(onesample$index==1),]$predicted_mY,
+                      sdlog=sigma(fit))
+        ## Take the mean of these values
+        g_y_exp[i] <- mean(p_y)
+        
+        ## Estimate pdf for y|A=0,C
+        p_y <- dlnorm(x=y_support[i],
+                      meanlog=onesample[which(onesample$index==0),]$predicted_mY,
+                      sdlog=sigma(fit))
+        ## Take the mean of these values
+        g_y_unexp[i] <- mean(p_y)
+      }
+      
+      ## STEP 5: Obtain the estimate of the median
+      increment <- y_support[2]-y_support[1]
+      cdf_exp <- data.frame(y, g_y_cum=cumsum(increment*g_y_exp))
+      cdf_unexp <- data.frame(y, g_y_cum=cumsum(increment*g_y_unexp))
+      
+      med_exp <- cdf_exp$y[which(cdf_exp$g_y_cum >= 0.5)[1]]
+      med_unexp <- cdf_unexp$y[which(cdf_unexp$g_y_cum >= 0.5)[1]]
+      
+      ACE_diff_med <- med_exp - med_unexp
+      return(ACE_diff_med) 
     }
   }
   
@@ -296,7 +342,7 @@ gcompstat_mean <- function(data, ind, out, exp, form){
 }
 
 #######################################
-gcompboot <- function(runboot_dat, R, stat, out, exp, form, ncpu){
+gcompboot <- function(runboot_dat, R, stat, out, exp, form, ncpu, ...){
   
   # ARGUMENTS:
   #       - runboot_dat = data file as specified above
@@ -304,11 +350,13 @@ gcompboot <- function(runboot_dat, R, stat, out, exp, form, ncpu){
   #       - stat = argument required for gcompboot function
   #       - form = formula for outcome model
   #       - ncpu = no. of processes to be used in parallel (integer)
+  #       - ... = additonal arguments to be passed to stat function
+  #               (e.g., reps for gcomp_sample; y_support for gcomp_grid)
   
   ## Performing bootstrap
   bstrap <- boot(data=runboot_dat, statistic=stat, stype="i", R=R,
                  out=out, exp=exp, formula=form,
-                 parallel="multicore", ncpus=ncpu)
+                 parallel="multicore", ncpus=ncpu, ...)
   
   ## Obtaining summary statistics
   est <- bstrap$t0
