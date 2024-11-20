@@ -2,7 +2,9 @@
 **Confounding adjustment methods for the difference in medians**
 
 Creator: Daisy Shepherd
+
 Collaborators: Benjamin Bear & Margarita Moreno-Betancur
+
 Affiliations: ^1 Clinical Epidemiology & Biostatistics Unit, The University of Melbourne & Murdoch Children's Research Institute; ^2 Department of Biostatistics and Computational Biology, The University of Rochester
 
 Corresponding author: Daisy Shepherd (daisy.shepherd@mcri.edu.au)
