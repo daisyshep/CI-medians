@@ -1,25 +1,35 @@
-######################################################################
-## CONFOUNDING-ADJUSTMENT METHODS - DIFFERENCE IN MEDIANS
+############################################################################################################################################
+## CONFOUNDING-ADJUSTMENT METHODS FOR THE DIFFERENCE IN MEDIANS
 ## Creator: D. A. Shepherd (UoM, MCRI)
-## Collaborator: M. Moreno-Betancur (UoM, MCRI)
-## Date edited: Dec 2022
-######################################################################
+## Collaborators: B. Baer (UoR), M. Moreno-Betancur (UoM, MCRI)
+## Date created: August 2023
+## Last updated: November 2024
+############################################################################################################################################
 
-# NOTES:
+## NOTES:
 # Functions supporting the manuscript:
 #       'Confounding-adjustment method for the difference in medians'
-#       Pre-print: https://arxiv.org/abs/2207.05940
+#       Published and available at: https://doi.org/10.1186/s12874-023-02100-6.
 # Functions to estimate the causal difference in medians
 # Bootstrap functions provided to estimate the std. errors and 95% CIs
 
-# Data file compatible with these functions is of the following form:
-#       - Continuous outcome (denoted as Y)
-#       - Binary exposure (denoted as A; coded as 0/1)
-#       - Confounders (five in total; denoted as C1,...,C5)
+## Please refer to the README for further details
+
+## CITATION: Please use the following citations when using this resource:
+# Shepherd, D., Baer, B. & Moreno-Betancur, M. Confounding-adjustment methods for the causal difference in medians. BMC Med Res Methodol 23, 288 (2023). https://doi.org/10.1186/s12874-023-02100-6.
+# Shepherd, D., Baer, B. & Moreno-Betancur, M. CI-medians. https://github.com/daisyshep/CI-medians.
+
+############################################################################################################################################
+
+## DATA COMPATIBILITY: 
+## Data file compatible with these functions is of the following form:
+##       - Continuous outcome (denoted as Y)
+##       - Binary exposure (denoted as A; coded as 0/1)
+##       - Confounders (five in total; denoted as C1,...,C5)
 
 ######################################################################
 
-## Loading required libraries
+## Loading required libraries (may require installation prior to use)
 library(boot)
 library(quantreg)
 library(MASS)
